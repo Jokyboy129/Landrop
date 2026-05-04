@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{T_WEB_TITLE}}</title>
+	<style>
+		body { font-family: -apple-system, sans-serif; text-align: center; padding: 20px; background: #f2f2f7; color: #1c1c1e; }
+		.card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
+		.download-card { border: 2px solid #007AFF; }
+		h2 { margin-top: 0; }
+		input[type="file"] { margin: 15px 0; width: 100%; }
+		.btn { background: #007AFF; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; display: inline-block; text-decoration: none; width: 100%; box-sizing: border-box; }
+		.btn-download { background: #34C759; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; text-decoration: none; display: block; }
+		
+		#progress-container { display: none; width: 100%; background: #e5e5ea; border-radius: 8px; margin-top: 15px; overflow: hidden; height: 22px; }
+		#progress-bar { width: 0%; height: 100%; background: #34C759; transition: width 0.1s linear; }
+		#progress-text { margin-top: 8px; font-size: 14px; color: #8e8e93; display: none; font-weight: bold; }
+	</style>
+</head>
+<body>
+	<h2>{{T_WEB_CONNECTED}} [HOSTNAME]</h2>
+	<div class="card">
+		<h3>📤 {{T_WEB_SEND_PC}}</h3>
+		<form id="upload-form">
+			<input type="file" id="file-input" name="file" multiple required>
+			<button type="submit" id="btn-submit" class="btn">{{T_WEB_BTN_SEND}}</button>
+			<div id="progress-container"><div id="progress-bar"></div></div>
+			<div id="progress-text">0%</div>
+		</form>
+	</div>
+	[DOWNLOAD_SECTION]
+
+	<script>
+		const form = document.getElementById('upload-form');
+		const fileInput = document.getElementById('file-input');
+		const btnSubmit = document.getElementById('btn-submit');
+		const progressContainer = document.getElementById('progress-container');
+		const progressBar = document.getElementById('progress-bar');
+		const progressText = document.getElementById('progress-text');
+		
+		let audioCtx;
+
+		function initAudio() {
+			if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+			if (audioCtx.state === 'suspended') audioCtx.resume();
+		}
+
+		function playTick() {
+			if (!audioCtx) return;
+			const osc = audioCtx.createOscillator();
+			const gain = audioCtx.createGain();
+			osc.type = 'sine';
+			osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+			gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.03);
+			osc.connect(gain);
+			gain.connect(audioCtx.destination);
+			osc.start();
+			osc.stop(audioCtx.currentTime + 0.03);
+		}
+
+		function playDone() {
+			if (!audioCtx) return;
+			const osc1 = audioCtx.createOscillator();
+			const gain1 = audioCtx.createGain();
+			osc1.frequency.value = 800;
+			gain1.gain.setValueAtTime(1, audioCtx.currentTime);
+			gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+			osc1.connect(gain1); gain1.connect(audioCtx.destination);
+			osc1.start(audioCtx.currentTime); osc1.stop(audioCtx.currentTime + 0.1);
+
+			const osc2 = audioCtx.createOscillator();
+			const gain2 = audioCtx.createGain();
+			osc2.frequency.value = 1200;
+			gain2.gain.setValueAtTime(1, audioCtx.currentTime + 0.1);
+			gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+			osc2.connect(gain2); gain2.connect(audioCtx.destination);
+			osc2.start(audioCtx.currentTime + 0.1); osc2.stop(audioCtx.currentTime + 0.3);
+		}
+
+		form.addEventListener('submit', function(e) {
+			e.preventDefault();
+			if (fileInput.files.length === 0) return;
+			
+			initAudio();
+			
+			btnSubmit.style.display = 'none';
+			progressContainer.style.display = 'block';
+			progressText.style.display = 'block';
+			progressText.innerText = "0% - {{T_WEB_UPLOADING}}";
+			
+			const formData = new FormData();
+			for(let i = 0; i < fileInput.files.length; i++) {
+				formData.append('file', fileInput.files[i]);
+			}
+			
+			const xhr = new XMLHttpRequest();
+			xhr.open('POST', '/upload', true);
+			
+			let lastTickTime = 0;
+			
+			xhr.upload.onprogress = function(e) {
+				if (e.lengthComputable) {
+					const percentComplete = (e.loaded / e.total) * 100;
+					progressBar.style.width = percentComplete + '%';
+					progressText.innerText = Math.round(percentComplete) + "% - {{T_WEB_UPLOADING}}";
+					
+					const now = Date.now();
+					if (now - lastTickTime > 1000) {
+						playTick();
+						lastTickTime = now;
+					}
+				}
+			};
+			
+			xhr.onload = function() {
+				if (xhr.status === 200) {
+					progressBar.style.width = '100%';
+					progressText.innerText = "{{T_WEB_SUCCESS}}";
+					playDone();
+					setTimeout(() => window.location.reload(), 1500);
+				} else {
+					progressText.innerText = "Error: " + xhr.status;
+					btnSubmit.style.display = 'block';
+				}
+			};
+			
+			xhr.send(formData);
+		});
+	</script>
+</body>
+</html>
