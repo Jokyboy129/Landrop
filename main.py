@@ -278,9 +278,22 @@ class LandropHTTPHandler(BaseHTTPRequestHandler):
 			except OSError:
 				self.send_error(404, "File not found")
 				return
+			
+			from urllib.parse import quote
+			try:
+				filename.encode('latin-1')
+				disposition = f'attachment; filename="{filename}"'
+			except UnicodeEncodeError:
+				ascii_name = filename.encode('ascii', errors='ignore').decode('ascii')
+				if not ascii_name:
+					ascii_name = "file"
+				disposition = f'attachment; filename="{ascii_name}"'
+			
+			disposition += f"; filename*=UTF-8''{quote(filename)}"
+
 			self.send_response(200)
 			self.send_header("Content-Type", "application/octet-stream")
-			self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+			self.send_header("Content-Disposition", disposition)
 			self.send_header("Connection", "close")
 			fs = os.fstat(f.fileno())
 			self.send_header("Content-Length", str(fs.st_size))
