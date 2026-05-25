@@ -10,6 +10,8 @@ import shutil
 import sys
 import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+
 
 from config import *
 from utils import AutostartManager, NetworkUtils, ZipUtils, AudioUtils, SettingsManager, Translator, TailscaleUtils
@@ -181,6 +183,9 @@ class LandropTaskBarIcon(wx.adv.TaskBarIcon):
 		self.frame.real_quit()
 
 # --- WEB SERVER ---
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+	daemon_threads = True
+
 class LandropHTTPHandler(BaseHTTPRequestHandler):
 	def log_message(self, format, *args): pass
 
@@ -623,7 +628,7 @@ class FileTransferApp(wx.Frame):
 
 	def start_web_server(self):
 		try:
-			server = HTTPServer(('0.0.0.0', WEB_PORT), LandropHTTPHandler)
+			server = ThreadedHTTPServer(('0.0.0.0', WEB_PORT), LandropHTTPHandler)
 			server.app_window = self 
 			while self.running: server.handle_request()
 		except: pass
