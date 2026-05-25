@@ -197,6 +197,10 @@ class LandropHTTPHandler(BaseHTTPRequestHandler):
 
 	def do_GET(self):
 		try:
+			try:
+				with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+					lf.write(f"do_GET called. Path={self.path}, Client={self.client_address}\n")
+			except: pass
 			if self.path.startswith("/download/"):
 				self.handle_file_download()
 				return
@@ -261,6 +265,10 @@ class LandropHTTPHandler(BaseHTTPRequestHandler):
 
 	def handle_file_download(self):
 		try:
+			try:
+				with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+					lf.write(f"handle_file_download started. Path={self.path}\n")
+			except: pass
 			hosted_file = self.server.app_window.hosted_file_path
 			if not hosted_file or not os.path.exists(hosted_file):
 				self.send_error(404, "File not found")
@@ -610,6 +618,10 @@ class FileTransferApp(wx.Frame):
 		self.is_closing = True
 		try: self.instance_sock.close()
 		except: pass
+		if hasattr(self, 'web_server') and self.web_server:
+			try:
+				threading.Thread(target=self.web_server.shutdown, daemon=True).start()
+			except: pass
 		self.Close()
 
 	def on_host_for_phone(self, event):
@@ -659,10 +671,18 @@ class FileTransferApp(wx.Frame):
 
 	def start_web_server(self):
 		try:
-			server = ThreadingHTTPServer(('0.0.0.0', WEB_PORT), LandropHTTPHandler)
-			server.app_window = self 
-			while self.running: server.handle_request()
-		except: pass
+			with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+				lf.write("start_web_server starting...\n")
+			self.web_server = ThreadingHTTPServer(('0.0.0.0', WEB_PORT), LandropHTTPHandler)
+			self.web_server.app_window = self 
+			with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+				lf.write("ThreadingHTTPServer created, calling serve_forever...\n")
+			self.web_server.serve_forever()
+		except Exception as e:
+			try:
+				with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+					lf.write(f"Exception in start_web_server: {e}\n")
+			except: pass
 
 	def listen_for_instance(self):
 		while self.running:
