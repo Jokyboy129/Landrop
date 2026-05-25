@@ -9,8 +9,7 @@ import email.parser
 import shutil
 import sys
 import re
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
 
 from config import *
@@ -183,9 +182,6 @@ class LandropTaskBarIcon(wx.adv.TaskBarIcon):
 		self.frame.real_quit()
 
 # --- WEB SERVER ---
-class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-	daemon_threads = True
-
 class LandropHTTPHandler(BaseHTTPRequestHandler):
 	def log_message(self, format, *args): pass
 
@@ -257,11 +253,16 @@ class LandropHTTPHandler(BaseHTTPRequestHandler):
 		self.send_response(200)
 		self.send_header("Content-Type", "application/octet-stream")
 		self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+		self.send_header("Connection", "close")
 		fs = os.fstat(f.fileno())
 		self.send_header("Content-Length", str(fs.st_size))
 		self.end_headers()
-		shutil.copyfileobj(f, self.wfile)
-		f.close()
+		try:
+			shutil.copyfileobj(f, self.wfile)
+			self.wfile.flush()
+		finally:
+			f.close()
+		self.close_connection = True
 		
 		tr = self.server.app_window.tr
 		wx.CallAfter(self.server.app_window.status_text.SetLabel, tr.get("msg_phone_dl", filename))
@@ -628,7 +629,7 @@ class FileTransferApp(wx.Frame):
 
 	def start_web_server(self):
 		try:
-			server = ThreadedHTTPServer(('0.0.0.0', WEB_PORT), LandropHTTPHandler)
+			server = ThreadingHTTPServer(('0.0.0.0', WEB_PORT), LandropHTTPHandler)
 			server.app_window = self 
 			while self.running: server.handle_request()
 		except: pass
