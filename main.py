@@ -183,90 +183,120 @@ class LandropTaskBarIcon(wx.adv.TaskBarIcon):
 
 # --- WEB SERVER ---
 class LandropHTTPHandler(BaseHTTPRequestHandler):
+	def setup(self):
+		import struct
+		try:
+			self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('hh', 1, 30))
+		except:
+			try:
+				self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 30))
+			except: pass
+		super().setup()
+
 	def log_message(self, format, *args): pass
 
 	def do_GET(self):
-		if self.path.startswith("/download/"):
-			self.handle_file_download()
-			return
-
-		self.send_response(200)
-		self.send_header("Content-type", "text/html; charset=utf-8")
-		self.end_headers()
-		
-		hostname = socket.gethostname()
-		hosted_file = self.server.app_window.hosted_file_path
-		tr = self.server.app_window.tr
-		download_section = ""
-		
-		if hosted_file and os.path.exists(hosted_file):
-			fname = os.path.basename(hosted_file)
-			display_text = fname
-			if fname.endswith(".zip") and self.server.app_window.is_folder_mode:
-				display_text = f"📦 {fname}"
-			else:
-				display_text = f"📄 {fname}"
-
-			download_section = f"""
-			<div class="card download-card">
-				<h3>📥 {tr.get('web_recv_pc')}</h3>
-				<p>{tr.get('web_pc_sending')}<br><strong>{display_text}</strong></p>
-				<a href="/download/{fname}" class="btn-download">{tr.get('web_btn_dl')}</a>
-			</div>
-			"""
-		else:
-			download_section = f"""
-			<div class="card" style="opacity: 0.6;">
-				<h3>📥 {tr.get('web_recv_pc')}</h3>
-				<p>{tr.get('web_waiting')}</p>
-			</div>
-			"""
-
 		try:
-			with open(HTML_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-				html = f.read()
-		except FileNotFoundError:
-			html = "<h2>Error: interface.html not found!</h2>"
+			if self.path.startswith("/download/"):
+				self.handle_file_download()
+				return
 
-		html = html.replace("{{T_WEB_TITLE}}", tr.get("web_title"))
-		html = html.replace("{{T_WEB_CONNECTED}}", tr.get("web_connected"))
-		html = html.replace("{{T_WEB_SEND_PC}}", tr.get("web_send_pc"))
-		html = html.replace("{{T_WEB_BTN_SEND}}", tr.get("web_btn_send"))
-		html = html.replace("{{T_WEB_UPLOADING}}", tr.get("web_uploading"))
-		html = html.replace("{{T_WEB_SUCCESS}}", tr.get("web_success"))
-		
-		html = html.replace("[HOSTNAME]", hostname)
-		html = html.replace("[DOWNLOAD_SECTION]", download_section)
+			self.send_response(200)
+			self.send_header("Content-type", "text/html; charset=utf-8")
+			self.end_headers()
+			
+			hostname = socket.gethostname()
+			hosted_file = self.server.app_window.hosted_file_path
+			tr = self.server.app_window.tr
+			download_section = ""
+			
+			if hosted_file and os.path.exists(hosted_file):
+				fname = os.path.basename(hosted_file)
+				display_text = fname
+				if fname.endswith(".zip") and self.server.app_window.is_folder_mode:
+					display_text = f"📦 {fname}"
+				else:
+					display_text = f"📄 {fname}"
 
-		self.wfile.write(html.encode('utf-8'))
+				download_section = f"""
+				<div class="card download-card">
+					<h3>📥 {tr.get('web_recv_pc')}</h3>
+					<p>{tr.get('web_pc_sending')}<br><strong>{display_text}</strong></p>
+					<a href="/download/{fname}" class="btn-download">{tr.get('web_btn_dl')}</a>
+				</div>
+				"""
+			else:
+				download_section = f"""
+				<div class="card" style="opacity: 0.6;">
+					<h3>📥 {tr.get('web_recv_pc')}</h3>
+					<p>{tr.get('web_waiting')}</p>
+				</div>
+				"""
+
+			try:
+				with open(HTML_TEMPLATE_PATH, "r", encoding="utf-8") as f:
+					html = f.read()
+			except FileNotFoundError:
+				html = "<h2>Error: interface.html not found!</h2>"
+
+			html = html.replace("{{T_WEB_TITLE}}", tr.get("web_title"))
+			html = html.replace("{{T_WEB_CONNECTED}}", tr.get("web_connected"))
+			html = html.replace("{{T_WEB_SEND_PC}}", tr.get("web_send_pc"))
+			html = html.replace("{{T_WEB_BTN_SEND}}", tr.get("web_btn_send"))
+			html = html.replace("{{T_WEB_UPLOADING}}", tr.get("web_uploading"))
+			html = html.replace("{{T_WEB_SUCCESS}}", tr.get("web_success"))
+			
+			html = html.replace("[HOSTNAME]", hostname)
+			html = html.replace("[DOWNLOAD_SECTION]", download_section)
+
+			self.wfile.write(html.encode('utf-8'))
+		except Exception as e:
+			try:
+				with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+					lf.write(f"Exception in do_GET: {e}\n")
+					import traceback
+					traceback.print_exc(file=lf)
+			except: pass
+			raise
 
 	def handle_file_download(self):
-		hosted_file = self.server.app_window.hosted_file_path
-		if not hosted_file or not os.path.exists(hosted_file):
-			self.send_error(404, "File not found")
-			return
-		filename = os.path.basename(hosted_file)
-		try: f = open(hosted_file, 'rb')
-		except OSError:
-			self.send_error(404, "File not found")
-			return
-		self.send_response(200)
-		self.send_header("Content-Type", "application/octet-stream")
-		self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-		self.send_header("Connection", "close")
-		fs = os.fstat(f.fileno())
-		self.send_header("Content-Length", str(fs.st_size))
-		self.end_headers()
 		try:
-			shutil.copyfileobj(f, self.wfile)
-			self.wfile.flush()
-		finally:
-			f.close()
-		self.close_connection = True
-		
-		tr = self.server.app_window.tr
-		wx.CallAfter(self.server.app_window.status_text.SetLabel, tr.get("msg_phone_dl", filename))
-		wx.CallAfter(self.server.app_window.play_done_sound)
+			hosted_file = self.server.app_window.hosted_file_path
+			if not hosted_file or not os.path.exists(hosted_file):
+				self.send_error(404, "File not found")
+				return
+			filename = os.path.basename(hosted_file)
+			try: f = open(hosted_file, 'rb')
+			except OSError:
+				self.send_error(404, "File not found")
+				return
+			self.send_response(200)
+			self.send_header("Content-Type", "application/octet-stream")
+			self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+			self.send_header("Connection", "close")
+			fs = os.fstat(f.fileno())
+			self.send_header("Content-Length", str(fs.st_size))
+			self.end_headers()
+			try:
+				shutil.copyfileobj(f, self.wfile)
+				self.wfile.flush()
+				# Give OS TCP buffer a moment to transmit before closing
+				time.sleep(0.2)
+			finally:
+				f.close()
+			self.close_connection = True
+			
+			tr = self.server.app_window.tr
+			wx.CallAfter(self.server.app_window.status_text.SetLabel, tr.get("msg_phone_dl", filename))
+			wx.CallAfter(self.server.app_window.play_done_sound)
+		except Exception as e:
+			try:
+				with open(r"c:\Users\Jakob\Documents\Landrop\landrop_debug.log", "a", encoding="utf-8") as lf:
+					lf.write(f"Exception in handle_file_download: {e}\n")
+					import traceback
+					traceback.print_exc(file=lf)
+			except: pass
+			raise
 
 	def do_POST(self):
 		if self.path == '/upload':
